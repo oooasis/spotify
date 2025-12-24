@@ -20,9 +20,19 @@ if (resStatus !== 200) {
         accountAttributesMapObj = bootstrapResponseObj.ucsResponseV0.success.customization.success.accountAttributesSuccess.accountAttributes;
         processMapObj(accountAttributesMapObj);
         // 处理 assignedValues，移除 capping/shuffle 相关的限制属性
-        const resolveResponseBootstrap = bootstrapResponseObj.ucsResponseV0?.success?.customization?.success?.resolveSuccess;
-        if (resolveResponseBootstrap && resolveResponseBootstrap.configuration && resolveResponseBootstrap.configuration.assignedValues) {
-            processAssignedValues(resolveResponseBootstrap.configuration.assignedValues);
+        try {
+            const ucsV0 = bootstrapResponseObj.ucsResponseV0;
+            const customization = ucsV0 && ucsV0.success && ucsV0.success.customization;
+            const ucsSuccess = customization && customization.success;
+            const resolveResponse = ucsSuccess && ucsSuccess.resolveSuccess;
+            const configuration = resolveResponse && resolveResponse.configuration;
+            const assignedValues = configuration && configuration.assignedValues;
+            console.log('bootstrap assignedValues count: ' + (assignedValues ? assignedValues.length : 'undefined'));
+            if (assignedValues && assignedValues.length > 0) {
+                processAssignedValues(assignedValues);
+            }
+        } catch (e) {
+            console.log('bootstrap assignedValues error: ' + e.message);
         }
         body = bootstrapResponseType.encode(bootstrapResponseObj).finish();
         console.log('bootstrap');
@@ -32,9 +42,17 @@ if (resStatus !== 200) {
         accountAttributesMapObj = ucsResponseWrapperMessage.success.accountAttributesSuccess.accountAttributes;
         processMapObj(accountAttributesMapObj);
         // 处理 assignedValues，移除 capping/shuffle 相关的限制属性
-        const resolveResponseCustomize = ucsResponseWrapperMessage.success?.resolveSuccess;
-        if (resolveResponseCustomize && resolveResponseCustomize.configuration && resolveResponseCustomize.configuration.assignedValues) {
-            processAssignedValues(resolveResponseCustomize.configuration.assignedValues);
+        try {
+            const ucsSuccess = ucsResponseWrapperMessage.success;
+            const resolveResponse = ucsSuccess && ucsSuccess.resolveSuccess;
+            const configuration = resolveResponse && resolveResponse.configuration;
+            const assignedValues = configuration && configuration.assignedValues;
+            console.log('customize assignedValues count: ' + (assignedValues ? assignedValues.length : 'undefined'));
+            if (assignedValues && assignedValues.length > 0) {
+                processAssignedValues(assignedValues);
+            }
+        } catch (e) {
+            console.log('customize assignedValues error: ' + e.message);
         }
         body = ucsResponseWrapperType.encode(ucsResponseWrapperMessage).finish();
         console.log('customize');
