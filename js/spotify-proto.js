@@ -121,79 +121,32 @@ function processMapObj(accountAttributesMapObj) {
 
 // 处理 assignedValues，移除 capping/shuffle 相关的限制属性
 // 参考 EeveeSpotifyReborn 项目的实现
+// 处理 assignedValues，移除限制属性或修改其值为解锁状态
 function processAssignedValues(assignedValuesArray) {
     if (!assignedValuesArray || !Array.isArray(assignedValuesArray)) {
         return;
     }
 
-    // 打印所有属性名用于调试
-    const allNames = assignedValuesArray.map(function (item) {
-        const propId = item.propertyId || {};
-        return propId.scope ? propId.scope + '/' + propId.name : propId.name;
-    });
-    console.log('ALL assignedValues names: ' + allNames.join(', '));
-
-    // 需要完全移除的属性名
+    // 1. 定义需要完全移除的项 (基于 EeveeSpotifyReborn)
     const removeNames = [
-        // capping 相关
         'enable_common_capping',
         'enable_pns_common_capping',
         'enable_pick_and_shuffle_common_capping',
         'enable_pick_and_shuffle_dynamic_cap',
         'pick_and_shuffle_timecap',
-        'init_retry_amount',
-        'audiobooks_common_capping_stopping_node',
-        'should_stop_player_when_capped',
-        'enable_audio_capping_notification',
-        'init_retry_jitter_percentage',
-        'init_retry_initial_interval',
-
-        // free on demand 相关
         'enable_free_on_demand_experiment',
         'enable_free_on_demand_context_menu_experiment',
-        'is_enabled_for_on_demand_trial',
-        'enable_call_trials_facade',
-
-        // mft plus 相关
         'enable_mft_plus_queue',
         'enable_mft_plus_extended_queue',
         'is_remove_from_queue_enabled_for_mft_plus',
         'is_reordering_for_mft_plus_allowed',
-        'is_queue_entry_point_enabled_for_mft_plus',
-        'is_add_to_queue_enabled_for_mft_plus',
-
-        // shuffle & smart shuffle 相关
-        'enable_shuffle_toggle_for_on_demand_playlists',
-        'shuffle_storage_kind',
-        'smart_shuffle_show_sheet_count',
-        'enable_smart_shuffle_lens_delay_factor',
-        'enable_smart_shuffle_lens_timeout',
-        'signal_timeout',
-
-        // time cap upsell 弹窗相关
-        'show_time_cap_upsell_with_premium_badge',
-        'is_promo_cta_enabled',
-        'enable_page_api',
-
-        // 限制规则相关
+        'should_nova_scroll_use_scrollsita',
         'enable_sillywalk_rules',
         'is_premium_only',
-        'enable_licensor_content_filtering',
-        'enable_playback_timeout_service',
-        'enable_playback_timeout_error_ui',
-        'playback_timeout_action',
-
-        // 其他
-        'should_nova_scroll_use_scrollsita'
+        'init_retry_amount'
     ];
-
-    // 需要完全移除的作用域
     const removeScopes = [
         'ios-feature-queue',
-        'ios-feature-contextualshuffle',
-        'ios-feature-ondemandtrial',
-        'ios-reinventfree-contextualupsellpremiumpromo-impl',
-        'ios-reinventfree-timecappivot-impl',
         'core-common-capping',
         'ios-feature-shuffletoggleupsell',
         'ios-system-smartshuffle',
@@ -201,40 +154,39 @@ function processAssignedValues(assignedValuesArray) {
         'core-audiobook-sequence-provider-feature'
     ];
 
-    const removedItems = [];
+    const logItems = [];
 
-    // 遍历并过滤（从后向前遍历以便安全删除）
+    // 从后向前遍历以安全删除
     for (let i = assignedValuesArray.length - 1; i >= 0; i--) {
         const item = assignedValuesArray[i];
         const propId = item.propertyId || {};
         const name = propId.name || '';
         const scope = propId.scope || '';
 
-        // 移除匹配 scope 的项
-        if (removeScopes.includes(scope)) {
-            removedItems.push('scope:' + scope + '/' + name);
+        // A. 匹配移除逻辑
+        if (removeScopes.includes(scope) || removeNames.includes(name)) {
+            logItems.push('Removed: ' + (scope ? scope + '/' : '') + name);
             assignedValuesArray.splice(i, 1);
             continue;
         }
 
-        // 移除匹配 name 的项
-        if (removeNames.includes(name)) {
-            removedItems.push('name:' + name);
-            assignedValuesArray.splice(i, 1);
-            continue;
-        }
-
-        // 修改特定属性的值
+        // B. 匹配修改逻辑 (关键修复：显式设置值而非删除)
+        // 彻底关闭播放超时/重置逻辑
         if (name === 'enable_playback_timeout_service' || name === 'enable_playback_timeout_error_ui') {
             item.boolValue = { value: false };
-            removedItems.push('modified:' + name + '->false');
+            logItems.push('SetFalse: ' + name);
         }
-        if (name === 'playback_timeout_action') {
+        else if (name === 'playback_timeout_action') {
             item.enumValue = { value: 'Nothing' };
-            removedItems.push('modified:' + name + '->Nothing');
+            logItems.push('SetNothing: ' + name);
+        }
+        // 强制开启点播相关的实验标志 (维持新安装时的宽限状态)
+        else if (name === 'is_enabled_for_on_demand_trial' || name === 'enable_call_trials_facade') {
+            item.boolValue = { value: true };
+            logItems.push('SetTrue: ' + name);
         }
     }
 
-    console.log('REMOVED/MODIFIED items: ' + (removedItems.length > 0 ? removedItems.join(', ') : 'NONE'));
-    console.log('REMAINING count: ' + assignedValuesArray.length);
+    console.log('Processed items: ' + (logItems.length > 0 ? logItems.join(', ') : 'None'));
+    console.log('Remaining assignedValues count: ' + assignedValuesArray.length);
 }
