@@ -142,6 +142,11 @@ function processAssignedValues(assignedValuesArray) {
         'enable_pick_and_shuffle_dynamic_cap',
         'pick_and_shuffle_timecap',
         'init_retry_amount',
+        'audiobooks_common_capping_stopping_node',
+        'should_stop_player_when_capped',
+        'enable_audio_capping_notification',
+        'init_retry_jitter_percentage',
+        'init_retry_initial_interval',
 
         // free on demand 相关
         'enable_free_on_demand_experiment',
@@ -157,13 +162,26 @@ function processAssignedValues(assignedValuesArray) {
         'is_queue_entry_point_enabled_for_mft_plus',
         'is_add_to_queue_enabled_for_mft_plus',
 
-        // shuffle 相关
+        // shuffle & smart shuffle 相关
         'enable_shuffle_toggle_for_on_demand_playlists',
         'shuffle_storage_kind',
+        'smart_shuffle_show_sheet_count',
+        'enable_smart_shuffle_lens_delay_factor',
+        'enable_smart_shuffle_lens_timeout',
+        'signal_timeout',
 
-        // time cap upsell 弹窗相关 - 重要！
+        // time cap upsell 弹窗相关
         'show_time_cap_upsell_with_premium_badge',
         'is_promo_cta_enabled',
+        'enable_page_api',
+
+        // 限制规则相关
+        'enable_sillywalk_rules',
+        'is_premium_only',
+        'enable_licensor_content_filtering',
+        'enable_playback_timeout_service',
+        'enable_playback_timeout_error_ui',
+        'playback_timeout_action',
 
         // 其他
         'should_nova_scroll_use_scrollsita'
@@ -176,7 +194,11 @@ function processAssignedValues(assignedValuesArray) {
         'ios-feature-ondemandtrial',
         'ios-reinventfree-contextualupsellpremiumpromo-impl',
         'ios-reinventfree-timecappivot-impl',
-        'core-common-capping'
+        'core-common-capping',
+        'ios-feature-shuffletoggleupsell',
+        'ios-system-smartshuffle',
+        'ios-feature-audiobook-capping',
+        'core-audiobook-sequence-provider-feature'
     ];
 
     const removedItems = [];
