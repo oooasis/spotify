@@ -124,7 +124,7 @@ function processAssignedValues(assignedValuesArray) {
     }
 
     // 打印所有属性名用于调试
-    const allNames = assignedValuesArray.map(function(item) {
+    const allNames = assignedValuesArray.map(function (item) {
         const propId = item.propertyId || {};
         return propId.scope ? propId.scope + '/' + propId.name : propId.name;
     });
@@ -132,22 +132,49 @@ function processAssignedValues(assignedValuesArray) {
 
     // 需要完全移除的属性名
     const removeNames = [
+        // capping 相关
         'enable_common_capping',
         'enable_pns_common_capping',
         'enable_pick_and_shuffle_common_capping',
         'enable_pick_and_shuffle_dynamic_cap',
         'pick_and_shuffle_timecap',
+        'init_retry_amount',
+
+        // free on demand 相关
         'enable_free_on_demand_experiment',
         'enable_free_on_demand_context_menu_experiment',
+        'is_enabled_for_on_demand_trial',
+        'enable_call_trials_facade',
+
+        // mft plus 相关
         'enable_mft_plus_queue',
         'enable_mft_plus_extended_queue',
         'is_remove_from_queue_enabled_for_mft_plus',
         'is_reordering_for_mft_plus_allowed',
+        'is_queue_entry_point_enabled_for_mft_plus',
+        'is_add_to_queue_enabled_for_mft_plus',
+
+        // shuffle 相关
+        'enable_shuffle_toggle_for_on_demand_playlists',
+        'shuffle_storage_kind',
+
+        // time cap upsell 弹窗相关 - 重要！
+        'show_time_cap_upsell_with_premium_badge',
+        'is_promo_cta_enabled',
+
+        // 其他
         'should_nova_scroll_use_scrollsita'
     ];
 
     // 需要完全移除的作用域
-    const removeScopes = ['ios-feature-queue'];
+    const removeScopes = [
+        'ios-feature-queue',
+        'ios-feature-contextualshuffle',
+        'ios-feature-ondemandtrial',
+        'ios-reinventfree-contextualupsellpremiumpromo-impl',
+        'ios-reinventfree-timecappivot-impl',
+        'core-common-capping'
+    ];
 
     const removedItems = [];
 
@@ -182,7 +209,7 @@ function processAssignedValues(assignedValuesArray) {
             removedItems.push('modified:' + name + '->Nothing');
         }
     }
-    
+
     console.log('REMOVED/MODIFIED items: ' + (removedItems.length > 0 ? removedItems.join(', ') : 'NONE'));
     console.log('REMAINING count: ' + assignedValuesArray.length);
 }
