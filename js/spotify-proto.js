@@ -123,6 +123,13 @@ function processAssignedValues(assignedValuesArray) {
         return;
     }
 
+    // 打印所有属性名用于调试
+    const allNames = assignedValuesArray.map(function(item) {
+        const propId = item.propertyId || {};
+        return propId.scope ? propId.scope + '/' + propId.name : propId.name;
+    });
+    console.log('ALL assignedValues names: ' + allNames.join(', '));
+
     // 需要完全移除的属性名
     const removeNames = [
         'enable_common_capping',
@@ -142,6 +149,8 @@ function processAssignedValues(assignedValuesArray) {
     // 需要完全移除的作用域
     const removeScopes = ['ios-feature-queue'];
 
+    const removedItems = [];
+
     // 遍历并过滤（从后向前遍历以便安全删除）
     for (let i = assignedValuesArray.length - 1; i >= 0; i--) {
         const item = assignedValuesArray[i];
@@ -151,12 +160,14 @@ function processAssignedValues(assignedValuesArray) {
 
         // 移除匹配 scope 的项
         if (removeScopes.includes(scope)) {
+            removedItems.push('scope:' + scope + '/' + name);
             assignedValuesArray.splice(i, 1);
             continue;
         }
 
         // 移除匹配 name 的项
         if (removeNames.includes(name)) {
+            removedItems.push('name:' + name);
             assignedValuesArray.splice(i, 1);
             continue;
         }
@@ -164,10 +175,14 @@ function processAssignedValues(assignedValuesArray) {
         // 修改特定属性的值
         if (name === 'enable_playback_timeout_service' || name === 'enable_playback_timeout_error_ui') {
             item.boolValue = { value: false };
+            removedItems.push('modified:' + name + '->false');
         }
         if (name === 'playback_timeout_action') {
             item.enumValue = { value: 'Nothing' };
+            removedItems.push('modified:' + name + '->Nothing');
         }
     }
-    console.log('processAssignedValues: done');
+    
+    console.log('REMOVED/MODIFIED items: ' + (removedItems.length > 0 ? removedItems.join(', ') : 'NONE'));
+    console.log('REMAINING count: ' + assignedValuesArray.length);
 }
