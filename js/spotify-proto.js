@@ -14,57 +14,76 @@ if (resStatus !== 200) {
     const binaryBody = isQuanX ? new Uint8Array($response.bodyBytes) : $response.body;
     let accountAttributesMapObj;
     let body;
+    const spotifyRoot = protobuf.Root.fromJSON(spotifyJson);
+    const bootstrapResponseType = spotifyRoot.lookupType("BootstrapResponse");
+    const ucsResponseWrapperType = spotifyRoot.lookupType("UcsResponseWrapper");
+
     if (url.includes("bootstrap/v1/bootstrap") && method === postMethod) {
-        let bootstrapResponseType = protobuf.Root.fromJSON(spotifyJson).lookupType("BootstrapResponse");
         let bootstrapResponseObj = bootstrapResponseType.decode(binaryBody);
-        accountAttributesMapObj = bootstrapResponseObj.ucsResponseV0.success.customization.success.accountAttributesSuccess.accountAttributes;
-        processMapObj(accountAttributesMapObj);
-        // 处理 assignedValues，移除 capping/shuffle 相关的限制属性
-        try {
-            const ucsV0 = bootstrapResponseObj.ucsResponseV0;
-            const customization = ucsV0 && ucsV0.success && ucsV0.success.customization;
-            const ucsSuccess = customization && customization.success;
-            const resolveResponse = ucsSuccess && ucsSuccess.resolveSuccess;
-            const configuration = resolveResponse && resolveResponse.configuration;
-            const assignedValues = configuration && configuration.assignedValues;
-            console.log('bootstrap assignedValues count: ' + (assignedValues ? assignedValues.length : 'undefined'));
-            if (assignedValues && assignedValues.length > 0) {
-                processAssignedValues(assignedValues);
-            }
-        } catch (e) {
-            console.log('bootstrap assignedValues error: ' + e.message);
+
+        // 1. 处理 ucsResponseV0 (嵌套路径: ucsResponseV0.success.customization)
+        if (bootstrapResponseObj.ucsResponseV0 &&
+            bootstrapResponseObj.ucsResponseV0.success &&
+            bootstrapResponseObj.ucsResponseV0.success.customization) {
+
+            console.log('Processing bootstrap ucsResponseV0 customization');
+            ensureUcsPremium(bootstrapResponseObj.ucsResponseV0.success.customization);
         }
+
+        // 2. 处理 trialsFacadeResponseV1 (如果有)
+        if (bootstrapResponseObj.trialsFacadeResponseV1 && bootstrapResponseObj.trialsFacadeResponseV1.success) {
+            console.log('Suppressing trialsFacadeResponseV1');
+            bootstrapResponseObj.trialsFacadeResponseV1.success.field1 = 1;
+        }
+
         body = bootstrapResponseType.encode(bootstrapResponseObj).finish();
-        console.log('bootstrap');
+        console.log('bootstrap processed');
     } else if (url.includes("user-customization-service/v1/customize") && method === postMethod) {
-        let ucsResponseWrapperType = protobuf.Root.fromJSON(spotifyJson).lookupType("UcsResponseWrapper");
         let ucsResponseWrapperMessage = ucsResponseWrapperType.decode(binaryBody);
-        accountAttributesMapObj = ucsResponseWrapperMessage.success.accountAttributesSuccess.accountAttributes;
-        processMapObj(accountAttributesMapObj);
-        // 处理 assignedValues，移除 capping/shuffle 相关的限制属性
-        try {
-            const ucsSuccess = ucsResponseWrapperMessage.success;
-            const resolveResponse = ucsSuccess && ucsSuccess.resolveSuccess;
-            const configuration = resolveResponse && resolveResponse.configuration;
-            const assignedValues = configuration && configuration.assignedValues;
-            console.log('customize assignedValues count: ' + (assignedValues ? assignedValues.length : 'undefined'));
-            if (assignedValues && assignedValues.length > 0) {
-                processAssignedValues(assignedValues);
-            }
-        } catch (e) {
-            console.log('customize assignedValues error: ' + e.message);
-        }
+
+        ensureUcsPremium(ucsResponseWrapperMessage);
+
         body = ucsResponseWrapperType.encode(ucsResponseWrapperMessage).finish();
-        console.log('customize');
+        console.log('customize processed');
     } else {
         $notification.post('spotify解锁premium', "路径/请求方法匹配错误:", method + "," + url);
     }
-    // console.log(`${body.byteLength}---${body.buffer.byteLength}`);
+
     if (isQuanX) {
         $done({ bodyBytes: body.buffer.slice(body.byteOffset, body.byteLength + body.byteOffset) });
     } else {
         $done({ body });
     }
+}
+
+// 核心增强：确保 UCS 响应包含 Premium 状态
+function ensureUcsPremium(ucsWrapper) {
+    if (!ucsWrapper.success) {
+        ucsWrapper.success = {};
+    }
+    const ucs = ucsWrapper.success;
+
+    // 1. 强制注入 Account Attributes
+    if (!ucs.accountAttributesSuccess) {
+        ucs.accountAttributesSuccess = { accountAttributes: {} };
+    }
+    processMapObj(ucs.accountAttributesSuccess.accountAttributes);
+
+    // 2. 处理 Resolve Configuration
+    if (ucs.resolveSuccess && ucs.resolveSuccess.configuration) {
+        const config = ucs.resolveSuccess.configuration;
+
+        // 固定配置 ID，防止 App 检查更新或失效
+        config.configurationAssignmentId = "premium-fixed-id-2025";
+        config.fetchTimeMillis = Date.now();
+
+        if (config.assignedValues && config.assignedValues.length > 0) {
+            processAssignedValues(config.assignedValues);
+        }
+    }
+
+    // 3. 更新顶层获取时间
+    ucs.fetchTimeMillis = Date.now();
 }
 
 function processMapObj(accountAttributesMapObj) {
@@ -119,8 +138,6 @@ function processMapObj(accountAttributesMapObj) {
     // accountAttributesMapObj['publish-playlist'] = {boolValue : true};
 }
 
-// 处理 assignedValues，移除 capping/shuffle 相关的限制属性
-// 参考 EeveeSpotifyReborn 项目的实现
 // 处理 assignedValues，移除限制属性或修改其值为解锁状态
 function processAssignedValues(assignedValuesArray) {
     if (!assignedValuesArray || !Array.isArray(assignedValuesArray)) {
@@ -133,9 +150,9 @@ function processAssignedValues(assignedValuesArray) {
         'enable_pns_common_capping',
         'enable_pick_and_shuffle_common_capping',
         'enable_pick_and_shuffle_dynamic_cap',
-        'pick_and_shuffle_timecap',
         'enable_free_on_demand_experiment',
         'enable_free_on_demand_context_menu_experiment',
+        'pick_and_shuffle_timecap',
         'enable_mft_plus_queue',
         'enable_mft_plus_extended_queue',
         'is_remove_from_queue_enabled_for_mft_plus',
@@ -156,37 +173,73 @@ function processAssignedValues(assignedValuesArray) {
 
     const logItems = [];
 
-    // 从后向前遍历以安全删除
+    // 从后向前遍历以安全删除或修改
     for (let i = assignedValuesArray.length - 1; i >= 0; i--) {
         const item = assignedValuesArray[i];
         const propId = item.propertyId || {};
         const name = propId.name || '';
         const scope = propId.scope || '';
 
-        // A. 匹配移除逻辑
-        if (removeScopes.includes(scope) || removeNames.includes(name)) {
+        // A. 显式禁用 (根据 Eevee 经验，这些项设为禁用比删除更稳健)
+        if (name === 'enable_pick_and_shuffle_common_capping') {
+            setProtobufEnum(item, 'Disabled');
+            logItems.push('SetDisabled: ' + name);
+            continue;
+        }
+        if (name === 'enable_pick_and_shuffle_dynamic_cap') {
+            setProtobufBool(item, false);
+            logItems.push('SetFalse: ' + name);
+            continue;
+        }
+        if (name === 'enable_playback_timeout_service' || name === 'enable_playback_timeout_error_ui') {
+            setProtobufBool(item, false);
+            logItems.push('SetFalse: ' + name);
+            continue;
+        }
+        if (name === 'playback_timeout_action') {
+            setProtobufEnum(item, 'Nothing');
+            logItems.push('SetNothing: ' + name);
+            continue;
+        }
+        if (name === 'is_enabled_for_on_demand_trial' || name === 'enable_call_trials_facade') {
+            setProtobufBool(item, true);
+            logItems.push('SetTrue: ' + name);
+            continue;
+        }
+        // Explicitly set shuffle flags
+        if (name === 'shuffle_eligible') {
+            setProtobufBool(item, true);
+            logItems.push('SetTrue: ' + name);
+            continue;
+        }
+        if (name === 'shuffle_enabled') {
+            setProtobufBool(item, true);
+            logItems.push('SetTrue: ' + name);
+            continue;
+        }
+
+        // B. 移除限制
+        if (removeScopes.includes(scope) || removeNames.includes(name) || scope.includes('capping')) {
             logItems.push('Removed: ' + (scope ? scope + '/' : '') + name);
             assignedValuesArray.splice(i, 1);
             continue;
         }
-
-        // B. 匹配修改逻辑 (关键修复：显式设置值而非删除)
-        // 彻底关闭播放超时/重置逻辑
-        if (name === 'enable_playback_timeout_service' || name === 'enable_playback_timeout_error_ui') {
-            item.boolValue = { value: false };
-            logItems.push('SetFalse: ' + name);
-        }
-        else if (name === 'playback_timeout_action') {
-            item.enumValue = { value: 'Nothing' };
-            logItems.push('SetNothing: ' + name);
-        }
-        // 强制开启点播相关的实验标志 (维持新安装时的宽限状态)
-        else if (name === 'is_enabled_for_on_demand_trial' || name === 'enable_call_trials_facade') {
-            item.boolValue = { value: true };
-            logItems.push('SetTrue: ' + name);
-        }
     }
 
-    console.log('Processed items: ' + (logItems.length > 0 ? logItems.join(', ') : 'None'));
-    console.log('Remaining assignedValues count: ' + assignedValuesArray.length);
+    //console.log('Processed items: ' + (logItems.length > 0 ? logItems.join(', ') : 'None'));
+    // 获取剩余属性的摘要，用于深度分析
+    const remainingSummary = assignedValuesArray.map(it => (it.propertyId.scope || 'no-scope') + '/' + it.propertyId.name);
+    console.log('Remaining Count: ' + assignedValuesArray.length + '. First 5: ' + remainingSummary.slice(0, 5).join(', '));
+}
+
+function setProtobufBool(item, val) {
+    delete item.intValue;
+    delete item.enumValue;
+    item.boolValue = { value: val };
+}
+
+function setProtobufEnum(item, val) {
+    delete item.intValue;
+    delete item.boolValue;
+    item.enumValue = { value: val };
 }
