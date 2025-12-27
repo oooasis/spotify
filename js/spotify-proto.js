@@ -173,8 +173,12 @@ function processAssignedValues(assignedValuesArray) {
         'ios-feature-smartshuffle',
         'ios-feature-upsell'
     ];
-    // 敏感词黑名单
-    const blacklistKeywords = ['upsell', 'capping', 'limit', 'restrict', 'shuffle_eligible_toggle', 'pick_and_shuffle', 'premium_only'];
+    // 敏感词黑名单 (包含这些词的项将被物理移除)
+    const blacklistKeywords = [
+        'upsell', 'capping', 'timecap', 'limit', 'restrict',
+        'shuffle_eligible_toggle', 'pick_and_shuffle', 'premium_only',
+        'reinventfree'
+    ];
 
     const logItems = [];
 
@@ -235,11 +239,22 @@ function processAssignedValues(assignedValuesArray) {
         }
     }
 
-    // C. 增强型日志：探测剩余属性中的“漏网之鱼”
+    // C. 增强型日志：探测剩余属性中的“漏网之鱼” (排除已知的误报)
     const suspiciousItems = assignedValuesArray.filter(it => {
-        const path = (it.propertyId.scope ? it.propertyId.scope + '/' : '') + it.propertyId.name;
-        // 排除掉我们故意设置正确值的核心项
-        if (it.propertyId.name.includes('shuffle_eligible') || it.propertyId.name.includes('shuffle_enabled')) return false;
+        const name = it.propertyId.name || '';
+        const scope = it.propertyId.scope || '';
+        const path = (scope ? scope + '/' : '') + name;
+
+        // 排除掉我们故意设置正确值的核心项及误报
+        const ignoreList = [
+            'shuffle_eligible', 'shuffle_enabled', 'is_enabled_for_on_demand_trial',
+            'enable_call_trials_facade', 'enable_pick_and_shuffle_common_capping',
+            'enable_pick_and_shuffle_dynamic_cap', 'enable_playback_timeout',
+            'playback_timeout_action', 'recaptcha', 'caption'
+        ];
+
+        if (ignoreList.some(ig => path.toLowerCase().includes(ig))) return false;
+
         return ['cap', 'limit', 'upsell', 'trial', 'restrict'].some(kw => path.toLowerCase().includes(kw));
     }).map(it => (it.propertyId.scope || 'no-scope') + '/' + it.propertyId.name);
 
