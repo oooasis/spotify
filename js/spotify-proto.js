@@ -30,10 +30,10 @@ if (resStatus !== 200) {
             ensureUcsPremium(bootstrapResponseObj.ucsResponseV0.success.customization);
         }
 
-        // 2. 处理 trialsFacadeResponseV1 (如果有)
-        if (bootstrapResponseObj.trialsFacadeResponseV1 && bootstrapResponseObj.trialsFacadeResponseV1.success) {
-            console.log('Suppressing trialsFacadeResponseV1');
-            bootstrapResponseObj.trialsFacadeResponseV1.success.field1 = 1;
+        // 2. 处理 trialsFacadeResponseV1 (彻底移除以防干扰)
+        if (bootstrapResponseObj.trialsFacadeResponseV1) {
+            console.log('Suppressing trialsFacadeResponseV1 entirely');
+            delete bootstrapResponseObj.trialsFacadeResponseV1;
         }
 
         body = bootstrapResponseType.encode(bootstrapResponseObj).finish();
@@ -144,7 +144,7 @@ function processAssignedValues(assignedValuesArray) {
         return;
     }
 
-    // 1. 定义需要完全移除的项 (基于 EeveeSpotifyReborn)
+    // 1. 定义需要完全移除的项 (基于 Eevee 及关键词探测)
     const removeNames = [
         'enable_common_capping',
         'enable_pns_common_capping',
@@ -160,7 +160,8 @@ function processAssignedValues(assignedValuesArray) {
         'should_nova_scroll_use_scrollsita',
         'enable_sillywalk_rules',
         'is_premium_only',
-        'init_retry_amount'
+        'init_retry_amount',
+        'enable_upsell'
     ];
     const removeScopes = [
         'ios-feature-queue',
@@ -168,8 +169,12 @@ function processAssignedValues(assignedValuesArray) {
         'ios-feature-shuffletoggleupsell',
         'ios-system-smartshuffle',
         'ios-feature-audiobook-capping',
-        'core-audiobook-sequence-provider-feature'
+        'core-audiobook-sequence-provider-feature',
+        'ios-feature-smartshuffle',
+        'ios-feature-upsell'
     ];
+    // 敏感词黑名单
+    const blacklistKeywords = ['upsell', 'capping', 'limit', 'restrict', 'shuffle_eligible_toggle', 'pick_and_shuffle', 'premium_only'];
 
     const logItems = [];
 
@@ -219,11 +224,27 @@ function processAssignedValues(assignedValuesArray) {
         }
 
         // B. 移除限制
-        if (removeScopes.includes(scope) || removeNames.includes(name) || scope.includes('capping')) {
-            logItems.push('Removed: ' + (scope ? scope + '/' : '') + name);
+        const fullPath = (scope ? scope + '/' : '') + name;
+        const isBlacklisted = removeScopes.includes(scope) || removeNames.includes(name) ||
+            blacklistKeywords.some(kw => fullPath.toLowerCase().includes(kw));
+
+        if (isBlacklisted) {
+            logItems.push('Removed: ' + fullPath);
             assignedValuesArray.splice(i, 1);
             continue;
         }
+    }
+
+    // C. 增强型日志：探测剩余属性中的“漏网之鱼”
+    const suspiciousItems = assignedValuesArray.filter(it => {
+        const path = (it.propertyId.scope ? it.propertyId.scope + '/' : '') + it.propertyId.name;
+        // 排除掉我们故意设置正确值的核心项
+        if (it.propertyId.name.includes('shuffle_eligible') || it.propertyId.name.includes('shuffle_enabled')) return false;
+        return ['cap', 'limit', 'upsell', 'trial', 'restrict'].some(kw => path.toLowerCase().includes(kw));
+    }).map(it => (it.propertyId.scope || 'no-scope') + '/' + it.propertyId.name);
+
+    if (suspiciousItems.length > 0) {
+        console.log('!!! Suspicious items remaining: ' + suspiciousItems.join(', '));
     }
 
     //console.log('Processed items: ' + (logItems.length > 0 ? logItems.join(', ') : 'None'));
