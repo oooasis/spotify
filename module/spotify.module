@@ -1,14 +1,22 @@
 #!name=Spotify Premium
-#!desc=2025.6.27 部分解锁premium,音质不能设置为超高(建议登录后再打开脚本,重启app等待脚本生效)。功能: 去除播放广告、歌手/专辑列表正常展示、去除随机播放
+#!desc=部分解锁premium,音质不能设置为超高(建议登录后再打开脚本,重启app等待脚本生效)。功能: 去除播放广告、歌手/专辑列表正常展示、去除随机播放
 #!author=daozen
 #!homepage=https://github.com/daozen/rules
 #!icon=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Spotify.png
 #!date=2025-06-27
 #############################################
+# 原版6条→3条: .*-spclient\.spotify\.com 已覆盖 gae2-spclient，去除重复
+# header操作改用原生Rewrite，省去JS引擎启动开销
+
+[Rewrite]
+# 删除If-None-Match请求头 - 原生rewrite替代spotify-qx-header.js，零JS开销
+^https:\/\/(?:\w+-spclient|spclient\.wg)\.spotify\.com(?::443)?\/user-customization-service\/v1\/customize$ header-del If-None-Match
 
 [Script]
-http-request ^https:\/\/(?:\w+-spclient|spclient\.wg)\.spotify\.com(?::443)?\/user-customization-service\/v1\/customize$ script-path=https://raw.githubusercontent.com/daozen/rules/master/js/spotify-qx-header.js, requires-body=false, timeout=10, tag=Spotify Customize Header
+# Protobuf解码+注入Premium属性 - 必须用JS(二进制protobuf无法用原生rewrite处理)
 http-response ^https:\/\/(?:\w+-spclient|spclient\.wg)\.spotify\.com(?::443)?\/(?:bootstrap\/v1\/bootstrap|user-customization-service\/v1\/customize)$ script-path=https://raw.githubusercontent.com/daozen/rules/master/js/spotify-proto.js, requires-body=true, binary-body-mode=true, timeout=10, tag=Spotify Proto
+
+# 动态判断platform并替换 - 需JS做条件判断，原生rewrite无法实现
 http-request ^https:\/\/(?:\w+-spclient|spclient\.wg)\.spotify\.com(?::443)?\/(?:artistview\/v1\/artist|album-entity-view\/v2\/album)\/ script-path=https://raw.githubusercontent.com/daozen/rules/master/js/spotify-json.js, requires-body=false, timeout=10, tag=Spotify JSON
 
 [MITM]
